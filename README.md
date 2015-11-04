@@ -11,7 +11,8 @@ To use this, set up an alexa app on a Linux box following the instructions in as
       "consumer_secret" : "<INSERT_TWITTER_CONSUMER_SECRET_HERE>" 
     }
 
-Once ask-alexa-twitter has these keys, it can get access to Twitter's APIs for account authentication and, once you log in, post messages on your behalf.
+Once ask-alexa-twitter has these keys, it can get access to Twitter's APIs for account authentication and, once you log in, post messages on your behalf. The high level logic to post things to twitter is in voice_handlers.py and the http level authentication and user account caching are implemented in lib/twitter_utils.py.
+
 
 # ask-alexa-pykit
 Super simple Python starter code for developing apps for the Amazon Echo's  SDK - ASK:  Alexa Skills Kit.
