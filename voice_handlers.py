@@ -54,17 +54,16 @@ def session_ended_request_handler(request):
 def post_tweet_intent_handler(request):
     """
     Use the 'intent' field in the VoiceHandler to map to the respective intent.
-    You can insert arbitrary business logic code here    
     """
-
     tweet = request.get_slot_value("Tweet")
-    print (tweet)
     tweet = tweet if tweet else ""    
-    #Use ResponseBuilder object to build responses and UI cards
+
+    # Use ResponseBuilder object to build responses and UI cards
     if tweet:
         return r.create_response(message=post_tweet(request.user_id(), tweet),
                                  end_session=True)
     else:
+        # No tweet could be disambiguated
         return r.create_response(message="I'm sorry, I couldn't understand what you wanted to tweet."
                                  "Please prepend the message with either post or tweet",
                                  end_session=False)

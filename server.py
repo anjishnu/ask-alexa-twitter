@@ -27,15 +27,18 @@ class SkillResponse(object):
 class UserAuth(object):
     @cherrypy.expose
     def index(self, oauth_token, oauth_verifier, user_id):
+        """ Receive access token for user from twitter"""
         response_object = get_access_token(user_id, oauth_token, oauth_verifier)
+        return json.dumps({"status": "Logged in successfully!"})
 
 @cherrypy.popargs('user_id')
 class Login(object):
     @cherrypy.expose
     def index(self, user_id):
-        return authenticate_user_page(user_id, 
-                                      callback_url=cherrypy.request.base+"/get_auth/{}".format(user_id))
-        
+        """ Create login screen for user login"""
+        callback_url = cherrypy.request.base+"/get_auth/{}".format(user_id)
+        return authenticate_user_page(user_id, callback_url)
+
 if __name__ == "__main__":
     """
     Load the server config and launch the server
@@ -46,7 +49,9 @@ if __name__ == "__main__":
     print (json.dumps(server_config, indent=4))    
     config = {"global": server_config}    
     cherrypy.config.update(server_config)
+
     root = SkillResponse()
     root.get_auth = UserAuth()
     root.login = Login()
+
     cherrypy.quickstart(root, config=config)
