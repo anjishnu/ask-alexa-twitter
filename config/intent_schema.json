@@ -1,0 +1,13 @@
+{
+    "intents": [
+        {
+            "intent": "PostTweet",
+            "slots": [
+                {
+                    "name": "Tweet",
+                    "type": "LITERAL"
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,5 @@
+#Ignore keys (Essential!)
+keys/*
+*.pyc
+*/*.pyc
+!keys/README

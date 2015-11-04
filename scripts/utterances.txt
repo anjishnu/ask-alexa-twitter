@@ -1,0 +1,5 @@
+PostTweet	i want to post a tweet
+PostTweet	post {something that's a |tweet}
+PostTweet	tweet {some kind of message|tweet} on twitter
+PostTweet	tweet {a really long adn winding message|tweet}
+PostTweet	post {i really like cake and amazon echo is super awesome|tweet} on twitter
