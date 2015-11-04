@@ -4,7 +4,7 @@
 
 
 I wanted to demo the ask-alexa-pykit to build echo apps, so just as a sample I built this simple integration with Twitter's API that allows people to sign in using their accounts and post tweets to Twitter. 
-To use this, set up an alexa app on a Linux box following the instructions in ask-alexa-pykit, register as a developer on twitter to get access to developer credentials - then add your consumer_key and consumer_secret in keys/twitter_keys.json.
+To use this, set up an alexa app on a Linux box following the instructions in ask-alexa-pykit, register as a developer on twitter and register an application using https://apps.twitter.com/ to get access to developer credentials - then add your consumer_key and consumer_secret in <b>keys/twitter_keys.json</b>. The contents of that file should look something like this this:
 
     {
       "consumer_key" : "<INSERT_TWITTER_CONSUMER_KEY_HERE>",
