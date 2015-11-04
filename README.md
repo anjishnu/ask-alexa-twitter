@@ -1,3 +1,15 @@
+# ask-alexa-twitter
+
+I wanted to demo the ask-alexa-pykit to build echo apps, so just as a sample I built this simple integration with Twitter's API that allows people to sign in using their accounts and post tweets to Twitter. 
+To use this, set up an alexa app on a Linux box following the instructions in ask-alexa-pykit, register as a developer on twitter to get access to developer credentials - then add your consumer_key and consumer_secret in keys/twitter_keys.json.
+
+    {
+      "consumer_key" : "<INSERT_TWITTER_CONSUMER_KEY_HERE>",
+      "consumer_secret" : "<INSERT_TWITTER_CONSUMER_SECRET_HERE>" 
+    }
+
+Once ask-alexa-twitter has these keys, it can get access to Twitter's APIs for account authentication and, once you log in, post messages on your behalf.
+
 # ask-alexa-pykit
 Super simple Python starter code for developing apps for the Amazon Echo's  SDK - ASK:  Alexa Skills Kit.
 Check the scripts in the scripts folder for utility code on how to get started with building the config files used by the ASK.
