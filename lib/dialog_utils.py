@@ -1,5 +1,5 @@
 import os
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 import json
 
 RAW_RESPONSE = """
@@ -45,6 +45,9 @@ class Request(object):
     def user_id(self):
         return self.request["session"]["user"]["userId"]
 
+    def access_token(self):
+        return self.request['session']['user']['accessToken']
+
     def session_id(self):
         return self.request["session"]["sessionId"]
 
@@ -70,7 +73,8 @@ class ResponseBuilder(object):
     Simple class to help users to build responses
     """
     base_response = eval(RAW_RESPONSE)
-        
+       
+    @classmethod
     def create_response(self, message=None, end_session=False, card_obj=None):
         """
         message - text message to be spoken out by the Echo
@@ -84,7 +88,8 @@ class ResponseBuilder(object):
         if card_obj:
             response['response']['card'] = card_obj
         return response
-
+     
+    @classmethod
     def create_card(self, title=None, subtitle=None, content=None, card_type="Simple"):
         """
         card_obj = JSON card object to substitute the 'card' field in the raw_response
@@ -102,8 +107,68 @@ class ResponseBuilder(object):
         if content: card["content"] = content
         return card
 
-    def set_response_text(self, response_text):
-        self.response_text = response_text
 
-    def set_card_info(self, card_info):
-        raise NotImplementedError
+
+class VoiceQueue(object):
+    """
+    Encapsulates voice interaction metadata for a single user
+    """
+    def __init__(self, raw_queue = []):
+        self.queue = raw_queue[::-1]
+        self.prev = None
+
+    def is_empty(self):
+        return False if self.queue else True
+
+    def next_response(self):
+        self.prev = self.queue.pop()
+        return self.prev
+
+    def previous_response(self):
+        return self.prev
+
+    def extend(self, text_lst):
+        self.queue = text_lst[::-1].extend(self.queue)
+
+    def append(self, text):
+        self.queue = [text] + self.queue
+
+
+class VoiceCache(object):
+    """
+    Dictionary like cache to encapsulate retrieval of voice
+    interaction metadata for all users
+    Over time this can evolve under the hood to become more like LRU 
+    with some kind of filesystem backing. 
+    """
+    def __init__(self):
+        self.queues = defaultdict(lambda : VoiceQueue())
+
+    def __setitem__(self, key, item):
+        self.queues[key] = VoiceQueue(item)
+
+    def __getitem__(self, key):
+        return self.queues[key]
+
+    def __repr__(self):
+        return repr(self.queues)
+
+    def __len__(self):
+        return len(self.queues)
+
+    def __delitem__(self, key):
+        del self.queues[key]
+
+    def clear(self):
+        return self.queues.clear()
+
+
+def chunk_list(input_list, chunksize):
+    """ Helped function to chunk a list 
+    >>> lst = [1,2,3,4,5,6]
+    >>> chunk_list(lst)
+    [[1,2],[3,4],[5,6]]
+    """    
+    return [input_list[start : end] for start, end
+              in zip(range(0, len(input_list), chunksize),
+                     range(chunksize, len(input_list), chunksize))]

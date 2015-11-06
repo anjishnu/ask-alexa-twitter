@@ -1,21 +1,59 @@
 {
     "intents": [
         {
+            "intent": "PostTweet",
             "slots": [
                 {
                     "type": "LITERAL",
                     "name": "Tweet"
                 }
-            ],
-            "intent": "PostTweet"
+            ]
         },
         {
-            "slots": [],
-            "intent": "NextIntent"
+            "intent": "NextIntent",
+            "slots": []
         },
         {
-            "slots": [],
-            "intent": "ListHomeTweets"
+            "intent": "ListHomeTweets",
+            "slots": []
+        },
+        {
+            "intent": "FindLatestMentions",
+            "slots": []
+        },
+        {
+            "intent": "FindFavouriteTweets",
+            "slots": []
+        },      
+        {
+            "intent": "RetweetsOfMe",
+            "slots": []
+        },
+        {
+            "intent": "SearchTweets",
+            "slots": [
+                {
+                    "type": "LITERAL",
+                    "name": "Topic"
+                }
+            ]
+        },
+	    {
+            "intent": "AMAZON.StopIntent",
+            "slots": []
+		    }, 
+	{
+            "intent": "UserTweets",
+            "slots": []
+	        },
+
+        {
+            "intent": "AMAZON.HelpIntent",
+            "slots": []
+	        },
+        {
+            "intent": "PreviousIntent",
+            "slots": []
         }
     ]
 }
