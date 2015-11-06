@@ -1,13 +1,21 @@
 {
     "intents": [
         {
-            "intent": "PostTweet",
             "slots": [
                 {
-                    "name": "Tweet",
-                    "type": "LITERAL"
+                    "type": "LITERAL",
+                    "name": "Tweet"
                 }
-            ]
+            ],
+            "intent": "PostTweet"
+        },
+        {
+            "slots": [],
+            "intent": "NextIntent"
+        },
+        {
+            "slots": [],
+            "intent": "ListHomeTweets"
         }
     ]
 }
