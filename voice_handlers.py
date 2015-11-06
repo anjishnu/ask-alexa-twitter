@@ -1,4 +1,4 @@
-from lib.dialog_utils import VoiceHandler, ResponseBuilder
+from lib.dialog_utils import VoiceHandler, ResponseBuilder, VoiceCache
 from lib.twitter_utils import post_tweet, get_home_tweets
 import cherrypy
 import json
@@ -28,8 +28,9 @@ def launch_request_handler(request):
     Use the 'request_type' field to map them to non-intent requests
     """
     from lib.twitter_utils import local_cache as twitter_cache
-    if request.user_id() in twitter_cache['access_token']:
-        return r.create_response("Welcome, {}".format(twitter_cache["screen_name"][request.user_id()]))
+    if request.access_token() in twitter_cache:
+        twitter_cache[request.access_token()]["amzn_id"]= request.user_id()
+        return r.create_response("Welcome, {}".format(twitter_cache[request.access_token()]["screen_name"]))
 
     card = r.create_card(title="Please log into twitter",
                          content=cherrypy.url() + "login/{}".format(request.user_id()))
@@ -62,8 +63,8 @@ def post_tweet_intent_handler(request):
 
     # Use ResponseBuilder object to build responses and UI cards
     if tweet:
-        get_home_timeline(request.user_id())
-        return r.create_response(message=post_tweet(request.user_id(), tweet),
+        get_home_timeline(request.access_token)
+        return r.create_response(message=post_tweet(request.access_token(), tweet),
                                  end_session=True)
     else:
         # No tweet could be disambiguated
@@ -80,21 +81,22 @@ def post_tweet_intent_handler(request):
 def list_home_tweets_handler(request):
     # Max number of tweets to be spoken out by Alexa
     max_tweets = 3
-
     #Processing tweets into chunks
-    t = get_home_tweets(request.user_id())
-
-    chunks = [t[start : end] for start, end 
-              in zip(range(0, len(t), max_tweets), 
-                     range(max_tweets, len(t), max_tweets))]
-
+    tweets = get_home_tweets(request.access_token())
+    chunks = [tweets[start : end] for start, end 
+              in zip(range(0, len(tweets), max_tweets), 
+                     range(max_tweets, len(tweets), max_tweets))]
     next_queue = [" ".join(text_lst) for text_lst in chunks[1:]]
     next_cache[request.user_id()] = next_queue
-    return r.create_response(message = " ".join(chunks[0]), end_session=False)
+    return r.create_response(message = " ".join(chunks[0]), 
+                             end_session=False)
 
 
 @VoiceHandler(intent="NextIntent")
 def next_intent_handler(request):
+    """
+    Takes care of things whenver the user says 'next'
+    """
     user_queue = next_cache[request.user_id()]
     if not user_queue.is_empty():
         message = user_queue.next_response()

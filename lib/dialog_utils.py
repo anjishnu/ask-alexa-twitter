@@ -1,5 +1,5 @@
 import os
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 import json
 
 RAW_RESPONSE = """
@@ -44,6 +44,9 @@ class Request(object):
 
     def user_id(self):
         return self.request["session"]["user"]["userId"]
+
+    def access_token(self):
+        return self.request['session']['user']['accessToken']
 
     def session_id(self):
         return self.request["session"]["sessionId"]
@@ -107,3 +110,57 @@ class ResponseBuilder(object):
 
     def set_card_info(self, card_info):
         raise NotImplementedError
+
+
+class VoiceQueue(object):
+    """
+    Encapsulates voice interaction metadata for a single user
+    """
+    def __init__(self, raw_queue = []):
+        self.queue = raw_queue[::-1]
+        self.prev = None
+
+    def is_empty(self):
+        return True if self.queue else False
+
+    def next_response(self):
+        self.prev = self.queue.pop()
+        return self.prev
+
+    def previous_response(self):
+        return self.prev
+
+    def extend(self, text_lst):
+        self.queue = text_lst[::-1].extend(self.queue)
+
+    def append(self, text):
+        self.queue = [text] + self.queue
+
+
+class VoiceCache(object):
+    """
+    Dictionary like cache to encapsulate retrieval of voice
+    interaction metadata for all users
+    Over time this can evolve under the hood to become more like LRU 
+    with some kind of filesystem backing. 
+    """
+    def __init__(self):
+        self.queues = defaultdict(lambda : NextQueue())
+
+    def __setitem__(self, key, item):
+        self.queues[key] = NextQueue(item)
+
+    def __getitem__(self, key):
+        return self.queues[key]
+
+    def __repr__(self):
+        return repr(self.queues)
+
+    def __len__(self):
+        return len(self.queues)
+
+    def __delitem__(self, key):
+        del self.queues[key]
+
+    def clear(self):
+        return self.queues.clear()
