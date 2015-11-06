@@ -1,5 +1,5 @@
 from lib.dialog_utils import VoiceHandler, ResponseBuilder
-from lib.twitter_utils import post_tweet
+from lib.twitter_utils import post_tweet, get_home_tweets
 import cherrypy
 import json
 
@@ -11,7 +11,9 @@ Each VoiceHandler function receives a ResponseBuilder object as input and output
 A response object is defined as the output of ResponseBuilder.create_response()
 """
 
-r = ResponseBuilder()
+r = ResponseBuilder()    
+voice_cache = VoiceCache()
+
 
 def default_handler(request):
     """ The default handler gets invoked if no handler is set for a request """
@@ -30,8 +32,8 @@ def launch_request_handler(request):
         return r.create_response("Welcome, {}".format(twitter_cache["screen_name"][request.user_id()]))
 
     card = r.create_card(title="Please log into twitter",
-                         subtitle=None,
                          content=cherrypy.url() + "login/{}".format(request.user_id()))
+
     response = r.create_response(message="Welcome to twitter, looks like you haven't logged in! Log in via alexa.amazon.com.",
                                  card_obj=card)
     print (json.dumps(response, indent=4))    
@@ -60,12 +62,51 @@ def post_tweet_intent_handler(request):
 
     # Use ResponseBuilder object to build responses and UI cards
     if tweet:
+        get_home_timeline(request.user_id())
         return r.create_response(message=post_tweet(request.user_id(), tweet),
                                  end_session=True)
     else:
         # No tweet could be disambiguated
-        return r.create_response(message="I'm sorry, I couldn't understand what you wanted to tweet."
-                                 "Please prepend the message with either post or tweet",
-                                 end_session=False)
+        message = " ".join(
+            [
+                "I'm sorry, I couldn't understand what you wanted to tweet.",
+                "Please prepend the message with either post or tweet"
+            ]
+        )
+        return r.create_response(message=message, end_session=False)
 
 
+@VoiceHandler(intent="ListHomeTweets")
+def list_home_tweets_handler(request):
+    # Max number of tweets to be spoken out by Alexa
+    max_tweets = 3
+
+    #Processing tweets into chunks
+    t = get_home_tweets(request.user_id())
+
+    chunks = [t[start : end] for start, end 
+              in zip(range(0, len(t), max_tweets), 
+                     range(max_tweets, len(t), max_tweets))]
+
+    next_queue = [" ".join(text_lst) for text_lst in chunks[1:]]
+    next_cache[request.user_id()] = next_queue
+    return r.create_response(message = " ".join(chunks[0]), end_session=False)
+
+
+@VoiceHandler(intent="NextIntent")
+def next_intent_handler(request):
+    user_queue = next_cache[request.user_id()]
+    if not user_queue.is_empty():
+        message = user_queue.next_response()
+        if user_queue.is_empty():
+            end_session = True
+        else:
+            end_session = False
+            message = message + ". Please, say 'next' if you want me to read out more. "
+    else:
+        message = "Sorry, couldn't find anything in your next queue"
+        end_session = True
+    return r.create_response(message=message,
+                             end_session=end_session)
+        
+        
