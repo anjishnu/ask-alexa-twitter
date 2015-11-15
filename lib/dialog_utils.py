@@ -118,7 +118,7 @@ class VoiceQueue(object):
         self.prev = None
 
     def is_empty(self):
-        return False if self.queue else True
+        return True if self.queue else False
 
     def next_response(self):
         self.prev = self.queue.pop()

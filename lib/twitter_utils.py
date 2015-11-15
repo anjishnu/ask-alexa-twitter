@@ -140,6 +140,17 @@ def get_access_token(oauth_token, oauth_verifier):
     }
     return urlencode(fragments)
 
+    local_cache[uid]['access_token'] = response_obj['oauth_token'][0]
+    local_cache[uid]['access_secret'] = response_obj['oauth_token_secret'][0]
+    local_cache[uid]['twitter_user_id'] = response_obj['user_id'][0]
+    local_cache[uid]['screen_name'] = response_obj ['screen_name'][0]    
+    
+    fragments = {
+        "state" : local_cache['metadata']['state'],
+        "access_token" : uid,
+        "token_type" : "Bearer"
+    }
+    return urlencode(fragments)
 
 def strip_html(text):
     """ Get rid of ugly twitter html """
@@ -183,6 +194,12 @@ def process_tweets(tweet_list):
         processed += [(tweet['user']['name'], text)]
     return processed
 
+def strip_html(text):
+    """ Get rid of ugly twitter html """
+    return " ".join([token for token in text.split() 
+                     if not token.startswith('http:')
+                     and not token.startswith('https:')])
+    
 
 def make_twitter_request(url, user_id, params={}):
     """ Generically make a request to twitter API using a particular user's authorization """
