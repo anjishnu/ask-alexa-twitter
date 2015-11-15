@@ -111,7 +111,8 @@ def post_tweet(user_id, message):
     """
     url = "https://api.twitter.com/1.1/statuses/update.json"    
     params = { "status" : message }
-    r = make_twitter_request(url, user_id, params)
+    r = make_twitter_request(url, user_id, params, request_type='POST')
+    print (r.text)
     return "Successfully posted a tweet {}".format(message)
 
 
@@ -201,10 +202,12 @@ def strip_html(text):
                      and not token.startswith('https:')])
     
 
-def make_twitter_request(url, user_id, params={}):
+def make_twitter_request(url, user_id, params={}, request_type='GET'):
     """ Generically make a request to twitter API using a particular user's authorization """
-    return requests.get(url, auth=get_twitter_auth(user_id), params=params)
-   
+    if request_type == "GET":
+        return requests.get(url, auth=get_twitter_auth(user_id), params=params)
+    elif request_type == "POST":
+        return requests.post(url, auth=get_twitter_auth(user_id), params=params)
 
 def read_out_tweets(processed_tweets, speech_convertor=None):
     """

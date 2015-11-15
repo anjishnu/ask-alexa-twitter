@@ -165,17 +165,20 @@ def next_intent_handler(request):
     """
     Takes care of things whenver the user says 'next'
     """
-    user_queue = next_cache[request.user_id()]
-    if not user_queue.is_empty():
-        message = user_queue.next_response()
-        if user_queue.is_empty():
-            end_session = True
-        else:
-            end_session = False
-            message = message + ". Please, say 'next' if you want me to read out more. "
-    else:
-        message = "Sorry, couldn't find anything in your next queue"
-        end_session = True
+
+    message = "Sorry, couldn't find anything in your next queue"
+    end_session = True
+    try:
+        user_queue = next_cache[request.user_id()]
+        if not user_queue.is_empty():
+            message = user_queue.next_response()
+            if user_queue.is_empty():
+                end_session = True
+            else:
+                end_session = False
+                message = message + ". Please, say 'next' if you want me to read out more. "
+    except:
+        pass
     return r.create_response(message=message,
                              end_session=end_session)
         
