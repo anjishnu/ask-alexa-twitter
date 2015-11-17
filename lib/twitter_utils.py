@@ -9,17 +9,55 @@ import re
 from collections import defaultdict
 
 class LocalCache(object):
-    """Generic class for encapsulating twitter credential caching"""
-    def __init__(self, backup = "twitter.cache"):
-        self.backup = backup
+    """ Generic class for encapsulating twitter credential caching """
+    server_data_template = "{}.server"
+    user_data_template = "{0}.user.{1}"
+
+    def __init__(self, backup = "tmp/twitter.cache"):
+        self.backup = backup #Unique identifier for the backup of this cache
+        self.memcache = {
+            "users" : defaultdict(lambda : {}),
+            "server": defaultdict(lambda : {})
+        }
         self.deserialize()
 
+    def users(self):
+        return self.memcache['users']
+
+    def set_user_state(self, user_id, state):
+        self.memcache['users'][user_id] = state
+
+    def update_user_state(self, user_id, state = {}):
+        self.memcache['users'][user_id].update(state)
+        
+    def get_user_state(self, user_id):
+        return self.memcache['users'][user_id]
+
+    def clear_user_state(self, user_id):
+        return self.memcache['users'][user_id].clear()
+
+    def update_server_state(self, state_dict):
+        self.memcache['server'].update(state_dict)
+        
+    def get_server_state(self):
+        return self.memcache['server']
+
+    def clear_server_state(self):
+        return self.memcache['server'].clear()    
+
+    def initialize_user_queue(self, user_id, queue):
+        self.memcache['users'][user_id]['user_queue'] = ReadableQueue(queue)        
+        
+    def user_queue(self, user_id):
+        if 'user_queue' in self.memcache['users'][user_id]:
+            return self.memcache['users'][user_id]['user_queue']
+            
     def __setitem__(self, key, item):
         self.memcache[key] = item
 
     def __getitem__(self, key):
-        return self.memcache[key]
-    
+        return self.memcache[key]    
+
     def __repr__(self):
         return repr(self.memcache)
 
@@ -44,114 +82,149 @@ class LocalCache(object):
     def items(self):
         return self.memcache.items()
 
+    def server_fname(self):
+        return self.server_data_template.format(self.backup)
+        
+    def user_fname(self, user):
+        return self.user_data_template.format(self.backup, user)
+
     def deserialize(self):
         cache_loaded = False
-        if os.path.exists(self.backup) and not os.path.isdir(self.backup):
+        if os.path.exists(self.server_fname()) and not os.path.isdir(self.backup):
             try:
-                with open(self.backup) as backupfile:
+                self.memcache = { "server" : {},
+                                  "users" : {} }
+                
+                with open(self.server_fname()) as backupfile:
                     print ("Attempting to reload cache")
-                    self.memcache = json.load(backupfile)
+                    self.memcache['server'] = json.load(backupfile)
+
+
+                print ("Server cache loaded", json.dumps(self.memcache, indent=4))
+                for user in self.memcache['server']['user_list']:
+                    # Try to load as much user data as possible
+                    if os.path.exists(self.user_fname(user)):
+                        print ("found path for user", user)
+                        with open(self.user_fname(user)) as userfile:
+                            j_obj = json.load(userfile)
+                            if 'user_queue' in j_obj:
+                                j_obj['user_queue'] = ReadableQueue.deserialize(j_obj['user_queue'])
+                        self.memcache['users'][user] = j_obj
+                        print ("loaded data for user...", user, j_obj['screen_name'])
                     cache_loaded = True
             except:
                 print ("Cache file corrupted...")
         if not cache_loaded:
-            # Creating a fresh cache                                                                                                                    
-            self.memcache = defaultdict(dict)
-            
+            print ("Cache could not be loaded")
+            pass
 
     def serialize(self):
-        with open(self.backup, 'w') as backupfile:
-            backupfile.write(json.dumps(self.memcache, indent=4))
+        json_to_serialize = self.memcache['server']
+        user_list = list(self.users().keys())
+        json_to_serialize.update({"user_list" : user_list})
+        with open(self.server_fname(), 'w') as backup_server:
+            # Serialize Server:
+            backup_server.write(json.dumps(json_to_serialize, indent=4))
         
+        for user in user_list:
+            user_data = self.get_user_state(user)
+            if 'user_queue' in user_data:
+                user_data['user_queue']['queue'] = user_data['user_queue'].serialize()
+
+            with open(self.user_fname(user), 'w') as userfile:
+                userfile.write(json.dumps(user_data, indent=4))
 
     def __contains__(self, item):
         return item in self.memcache
 
     def __iter__(self):
         return iter(self.memcache)
+
     
+class ReadableQueue(object):    
+    def __init__(self, queue=[], pos=0):
+        self.hashmap = { "queue" : [(i, e) for i,e in enumerate(queue)],
+                         "pos" : pos }
+        return 
+
+    def queue(self):
+        return self.hashmap['queue']
+    
+    def is_empty(self):
+        return len(self.queue()) == 0
+
+    def is_finished(self):
+        return self.pos() == len(self.queue())
+
+    def pos(self):
+        return self.hashmap['pos']
+
+    def set_pos(self, val):
+        self.hashmap['pos'] = val
+
+    def get_next(self, offset=1):
+        print ("inside next...", offset, self.pos())
+        
+        if self.pos() < len(self.queue()):
+            print ("ENTERED LOOP")
+            temp_queue =  self.queue()[self.pos(): self.pos() + offset]
+            print ("TEMP QUEUE", temp_queue)
+
+            self.set_pos(self.pos() + offset)    
+            if self.pos() > len(self.queue()): self.set_pos(len(self.queue()))
+            print ("VALUE OF POS", self.pos())
+            return temp_queue
+
+            
+    def read_out_next(self, offset=1):
+         return " ".join([readable.read_out(index) for index,readable in self.get_next(offset)])
+
+    def has_prev(self):
+        return self.pos() > 0
+
+    def get_prev(self, offset=1):
+         if self.pos() > 0:
+             self.set_pos(self.pos() - offset)
+             if self.pos() < 0: 
+                 offset = offset + self.pos() 
+                 # [1, current(2), 3] get_prev(offeset=3) 
+                 # pos :=> -2, offset :=> 3-2 = 1, pos :=> 0, then read 0 to 1
+                 self.set_pos(0)
+             return self.queue()[self.pos() : offset]
+         return None
+         
+    def read_out_prev(self, offset=1):
+         return " ".join([readable.read_out() for readable in self.get_prev(offset)])
+
+    def serialize(self):
+         new_map = {
+             "queue" : [readable.serialize() for readable in self.queue()],
+             "pos" : self.pos()
+         }
+         return new_map
+
+    def serialize_to_disk(self, filename):
+         with open(filename, 'w') as outfile:
+             outfile.write(json.dumps(self.serialize()))
+     
+    @classmethod
+    def deserialize(self, json_obj, Readable):
+         queue = {Readable.deserialize(r) for r in json_obj['queue']}
+         pos = json_obj['pos']
+         rq =  ReadableQueue(queue, pos)
+         return rq
+
+    @classmethod
+    def deserialize_from_disk(self, filename, Readable):
+         with open(filename) as disk_file:
+             return self.deserialize(json.load(disk_file))
+
+
 
 #Local cache caches tokens for different users 
 local_cache = LocalCache()
 
 
-def get_cached_access_pair(uid):
-    if uid in local_cache:
-        return local_cache[uid]['access_token'], local_cache[uid]['access_secret']
-    else:
-        raise ValueError
-
-
-def get_request_token(callback_url=None):
-    url = "https://api.twitter.com/oauth/request_token"
-    consumer_key, consumer_secret = local_cache['twitter_keys']    
-    auth = OAuth1(consumer_key, consumer_secret)
-    params = { "oauth_callback" : callback_url } 
-    print (params)
-    r = requests.post(url, auth=auth, params=params)
-    response_obj = parse_qs(r.text)    
-    local_cache["request_token"] = response_obj['oauth_token'][0]
-    local_cache['request_secret'] = response_obj['oauth_token_secret'][0]    
-    return response_obj['oauth_token_secret'], response_obj['oauth_token']
-    
-
-def authenticate_user_page(callback_url="", metadata=None):
-    url = "https://api.twitter.com/oauth/authenticate"
-    oauth_secret, oauth_token = get_request_token(callback_url)
-    local_cache['metadata'] = metadata
-    params = { "force_login" : True,
-               "oauth_token": oauth_token }
-    r = requests.get(url, params=params)
-    return r.text
-    
-
-def post_tweet(user_id, message):
-    """
-    Helper function to post a tweet 
-    """
-    url = "https://api.twitter.com/1.1/statuses/update.json"    
-    params = { "status" : message }
-    r = make_twitter_request(url, user_id, params, request_type='POST')
-    print (r.text)
-    return "Successfully posted a tweet {}".format(message)
-
-
-def get_access_token(oauth_token, oauth_verifier):
-    url = "https://api.twitter.com/oauth/access_token"
-    params = {"oauth_verifier" : oauth_verifier}
-    request_token  = local_cache['request_token']
-    request_secret = local_cache['request_secret']
-    consumer_key, consumer_secret = local_cache['twitter_keys']
-    auth = OAuth1(consumer_key, consumer_secret, request_token, request_secret)
-
-    r = requests.post(url, params = params, auth=auth)
-    response_obj = parse_qs(r.text)
-
-    uid = response_obj['oauth_token'][0]    
-    print ("Access token", uid)
-    local_cache[uid]['access_token'] = response_obj['oauth_token'][0]
-    local_cache[uid]['access_secret'] = response_obj['oauth_token_secret'][0]
-    local_cache[uid]['twitter_user_id'] = response_obj['user_id'][0]
-    local_cache[uid]['screen_name'] = response_obj ['screen_name'][0]        
-    local_cache.serialize()
-    fragments = {
-        "state" : local_cache['metadata']['state'],
-        "access_token" : uid,
-        "token_type" : "Bearer"
-    }
-    return urlencode(fragments)
-
-    local_cache[uid]['access_token'] = response_obj['oauth_token'][0]
-    local_cache[uid]['access_secret'] = response_obj['oauth_token_secret'][0]
-    local_cache[uid]['twitter_user_id'] = response_obj['user_id'][0]
-    local_cache[uid]['screen_name'] = response_obj ['screen_name'][0]    
-    
-    fragments = {
-        "state" : local_cache['metadata']['state'],
-        "access_token" : uid,
-        "token_type" : "Bearer"
-    }
-    return urlencode(fragments)
 
 def strip_html(text):
     """ Get rid of ugly twitter html """
@@ -176,30 +249,146 @@ def strip_html(text):
     return " ".join([token for token in text.split() 
                      if  ('http:' not in token) and ('https:' not in token)])
 
+
+class Tweet(object):
+    def __init__(self, json_obj):
+        self.tweet = json_obj
+
+    def get_id(self):
+        return self.tweet['id']
+        
+    def get_raw_text(self):
+        return self.tweet['text']
+        
+    def _process_text(self):
+        text = strip_html(self.tweet['text'])
+        user_mentions = self.tweet['entities']['user_mentions']
+        text = text.replace('@', 'at ')
+        for user in user_mentions:            
+            text = text.replace(user['screen_name'], user['name'])
+        return text
+        
+    def get_screen_name(self):
+        return self.tweet['user']['screen_name']
+
+    def get_user_name(self):
+        return self.tweet['user']['name']
+        
+    def read_out(self, index):
+        text = self._process_text()
+        return "tweet number {num} by {user} : {text}".format(num=index+1, 
+                                                              user=self.get_screen_name(),
+                                                              text = text)
+    def user_mentions(self):
+        return self.tweet['user_mentions']
+
+    def serialize(self):
+        return json.dumps(self.tweet, indent=4)
+
+    @classmethod
+    def deserialize(self, json_str):
+        return Tweet(json.loads(json_str))
+
+def get_cached_access_pair(uid):
+    if uid in local_cache.users():
+        access_token = local_cache.get_user_state(uid)['access_token']
+        access_secret = local_cache.get_user_state(uid)['access_secret']
+        return access_token, access_secret
+    else:
+        raise ValueError
+
+
+def get_request_token(callback_url=None):
+    url = "https://api.twitter.com/oauth/request_token"
+
+
+    consumer_key, consumer_secret = local_cache.get_server_state()['twitter_keys']
+    # consumer_key, consumer_secret = local_cache['twitter_keys']    
+    
+
+    auth = OAuth1(consumer_key, consumer_secret)
+    params = { "oauth_callback" : callback_url } 
+    r = requests.post(url, auth=auth, params=params)
+    response_obj = parse_qs(r.text)    
+
+    # local_cache["request_token"] = response_obj['oauth_token'][0]
+    # local_cache['request_secret'] = response_obj['oauth_token_secret'][0]    
+
+    local_cache.update_server_state({ "request_token" : response_obj['oauth_token'][0],
+                                      "request_secret": response_obj['oauth_token_secret'][0] })
+    
+
+    return response_obj['oauth_token_secret'], response_obj['oauth_token']
+    
+
+def authenticate_user_page(callback_url="", metadata=None):
+    url = "https://api.twitter.com/oauth/authenticate"
+    oauth_secret, oauth_token = get_request_token(callback_url)
+    # local_cache['metadata'] = metadata
+    local_cache.update_server_state({'metadata' : metadata })
+
+    params = { "force_login" : True,
+               "oauth_token": oauth_token }
+    r = requests.get(url, params=params)
+    return r.text
+    
+
+def post_tweet(user_id, message):
+    """
+    Helper function to post a tweet 
+    """
+    url = "https://api.twitter.com/1.1/statuses/update.json"    
+    params = { "status" : message }
+    r = make_twitter_request(url, user_id, params, request_type='POST')
+    print (r.text)
+    return "Successfully posted a tweet {}".format(message)
+
+
+def get_access_token(oauth_token, oauth_verifier):
+    url = "https://api.twitter.com/oauth/access_token"
+    params = {"oauth_verifier" : oauth_verifier}
+
+    server_state = local_cache.get_server_state()
+    request_token  = server_state['request_token']
+    request_secret = server_state['request_secret']
+    consumer_key, consumer_secret = server_state['twitter_keys']
+
+    auth = OAuth1(consumer_key, consumer_secret, request_token, request_secret)
+
+    r = requests.post(url, params = params, auth=auth)
+    response_obj = parse_qs(r.text)
+
+    uid = response_obj['oauth_token'][0]    
+    print ("Access token", uid)
+
+
+    local_cache.set_user_state(user_id = uid,
+                               state = { "access_token" : response_obj['oauth_token'][0],
+                                         "access_secret" : response_obj['oauth_token_secret'][0],
+                                         'twitter_user_id': response_obj['user_id'][0],
+                                         'screen_name' : response_obj ['screen_name'][0] 
+                               })
+    local_cache.serialize()
+
+    fragments = {
+        "state" : local_cache.get_server_state()['metadata']['state'],
+        "access_token" : uid,
+        "token_type" : "Bearer"
+    }
+    return urlencode(fragments)
+
+
+
     
 def get_twitter_auth(user_id):
-    consumer_key, consumer_secret = local_cache['twitter_keys']
+    consumer_key, consumer_secret = local_cache.get_server_state()['twitter_keys']
     access_token, access_secret = get_cached_access_pair(user_id)
     return OAuth1(consumer_key, consumer_secret, access_token, access_secret)
 
 
 def process_tweets(tweet_list):
     """ Clean tweets and enumerate, preserving only things that we are interested in """  
-    processed = []
-    for tweet in tweet_list:
-        text = strip_html(tweet['text'])
-        user_mentions = tweet['entities']['user_mentions']
-        text = text.replace('@', 'at ')
-        for user in user_mentions:            
-            text = text.replace(user['screen_name'], user['name'])
-        processed += [(tweet['user']['name'], text)]
-    return processed
-
-def strip_html(text):
-    """ Get rid of ugly twitter html """
-    return " ".join([token for token in text.split() 
-                     if not token.startswith('http:')
-                     and not token.startswith('https:')])
+    return [Tweet(tweet) for tweet in tweet_list]
     
 
 def make_twitter_request(url, user_id, params={}, request_type='GET'):
@@ -208,6 +397,7 @@ def make_twitter_request(url, user_id, params={}, request_type='GET'):
         return requests.get(url, auth=get_twitter_auth(user_id), params=params)
     elif request_type == "POST":
         return requests.post(url, auth=get_twitter_auth(user_id), params=params)
+
 
 def read_out_tweets(processed_tweets, speech_convertor=None):
     """
@@ -218,17 +408,14 @@ def read_out_tweets(processed_tweets, speech_convertor=None):
                for index, (user, text) in enumerate(processed_tweets)]
 
 
-def request_tweet_list_spoken_form(url, user_id, params={}):
-    try:
-        return read_out_tweets(process_tweets(make_twitter_request(url, user_id).json()))
-    except ValueError:
-        return ["Sorry, your credentials could not be found"]
+def request_tweet_list(url, user_id, params={}):
+    return process_tweets(make_twitter_request(url, user_id).json())
 
 
 def get_home_tweets(user_id, input_params={}):
     url = "https://api.twitter.com/1.1/statuses/home_timeline.json"
     print ("Trying to get home tweets")
-    response = request_tweet_list_spoken_form(url, user_id)
+    response = request_tweet_list(url, user_id)
     return response
 
 
@@ -236,29 +423,27 @@ def get_retweets_of_me(user_id, input_params={}):
     """ returns recently retweeted  tweets """
     url = "https://api.twitter.com/1.1/statuses/retweets_of_me.json"
     print ("trying to get retweets")
-    return request_tweet_list_spoken_form(url, user_id)
+    return request_tweet_list(url, user_id)
 
 
 def get_my_favourite_tweets(user_id, input_params = {}):
     """ Returns a user's favourite tweets """
     url = "https://api.twitter.com/1.1/favorites/list.json"
-    return request_tweet_list_spoken_form(url, user_id)
+    return request_tweet_list(url, user_id)
 
 
 def get_user_latest_tweets(user_id, params={}):
     url = "https://api.twitter.com/1.1/statuses/user_timeline.json?"
-    return request_tweet_list_spoken_form(url, user_id, params)
+    return request_tweet_list(url, user_id, params)
     
 
 def get_latest_twitter_mentions(user_id):
     url = "https://api.twitter.com/1.1/statuses/mentions_timeline.json"
-    return request_tweet_list_spoken_form(url, user_id)
+    return request_tweet_list(url, user_id)
 
 
 def search_for_tweets_about(user_id, params):
     """ Search twitter API """
     url = "https://api.twitter.com/1.1/search/tweets.json"
     response = make_twitter_request(url, user_id, params)
-    return read_out_tweets(process_tweets(response.json()["statuses"]))
-
-    
+    return process_tweets(response.json()["statuses"]) 

@@ -46,7 +46,11 @@ class Request(object):
         return self.request["session"]["user"]["userId"]
 
     def access_token(self):
-        return self.request['session']['user']['accessToken']
+        try:
+            self.request['session']['user']['accessToken']
+        except:
+            return None
+
 
     def session_id(self):
         return self.request["session"]["sessionId"]
@@ -118,10 +122,11 @@ class VoiceQueue(object):
         self.prev = None
 
     def is_empty(self):
-        return True if self.queue else False
+        return False if self.queue else True
 
     def next_response(self):
         self.prev = self.queue.pop()
+        print (self.queue)
         return self.prev
 
     def previous_response(self):

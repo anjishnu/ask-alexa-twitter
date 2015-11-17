@@ -24,11 +24,9 @@ from config.config import TWITTER_CONSUMER_KEY, TWITTER_CONSUMER_SECRET
 from lib.twitter_utils import local_cache as twitter_cache
 
 # Run this code once on startup to load twitter keys into credentials
-if 'twitter_keys' not in twitter_cache:
-    twitter_cache['twitter_keys'] = (TWITTER_CONSUMER_KEY, TWITTER_CONSUMER_SECRET)
-
-
-next_cache = VoiceCache()
+server_cache_state = twitter_cache.get_server_state()
+if 'twitter_keys' not in server_cache_state:
+    server_cache_state['twitter_keys'] = (TWITTER_CONSUMER_KEY, TWITTER_CONSUMER_SECRET)
 
 
 def default_handler(request):
@@ -41,18 +39,16 @@ def launch_request_handler(request):
     """ Annotate functions with @VoiceHandler so that they can be automatically mapped 
     to request types. Use the 'request_type' field to map them to non-intent requests """
 
-    if request.access_token() in twitter_cache:
-        twitter_cache[request.access_token()]["amzn_id"]= request.user_id()
-        return r.create_response("Welcome, {}".format(twitter_cache[request.access_token()]["screen_name"]))
+    if request.access_token() in twitter_cache.users():
+        user_cache = twitter_cache.get_user_state(request.access_token())        
+        user_cache["amzn_id"]= request.user_id()
+        return r.create_response("Welcome, {}".format(user_cache["screen_name"]))
 
     card = r.create_card(title="Please log into twitter",
                          content=cherrypy.url() + "login/{}".format(request.user_id()))
-
     response = r.create_response(message="Welcome to twitter, looks like you haven't logged in!"
-                                 " Log in via alexa.amazon.com.", card_obj=card)
-    print (json.dumps(response, indent=4))    
+                                 " Log in via the alexa app.", card_obj=card)
     return response
-
 
 
 
@@ -105,10 +101,12 @@ def tweet_list_handler(request, tweet_list_builder, msg_prefix=""):
     tweets = tweet_list_builder(request.access_token())
     print (len(tweets), 'tweets found')
     if tweets:
-        chunks = chunk_list(tweets, max_response_tweets)
-        response_list = [" ".join(text_lst) for text_lst in chunks]
-        next_cache[request.user_id()] = response_list
-        message = msg_prefix + next_cache[request.user_id()].next_response() + ", say 'next' to hear more."
+        # chunks = chunk_list(tweets, max_response_tweets)
+        # next_cache[request.user_id()] = response_list
+        twitter_cache.initialize_user_queue(user_id=request.access_token(),
+                                            queue=tweets)
+        text_to_read_out = twitter_cache.user_queue(request.access_token()).read_out_next(max_response_tweets)        
+        message = msg_prefix + text_to_read_out + ", say 'next' to hear more."
         return r.create_response(message=message,
                                  end_session=False)
     else:
@@ -128,7 +126,6 @@ def search_tweets_handler(request):
                 "result_type" : "popular"
             }
             return search_for_tweets_about(request.access_token(), params)
-
         return tweet_list_handler(request, tweet_list_builder=search_tweets_builder)
     else:
          return r.create_response("I couldn't find a topic to search for in your request")
@@ -168,28 +165,22 @@ def next_intent_handler(request):
 
     message = "Sorry, couldn't find anything in your next queue"
     end_session = True
-    try:
-        user_queue = next_cache[request.user_id()]
-        if not user_queue.is_empty():
-            message = user_queue.next_response()
-            if user_queue.is_empty():
-                end_session = True
-            else:
+    if True:
+        user_queue = twitter_cache.user_queue(request.access_token())
+        if not user_queue.is_finished():
+            message = user_queue.read_out_next()
+            if not user_queue.is_finished():
                 end_session = False
                 message = message + ". Please, say 'next' if you want me to read out more. "
-    except:
-        pass
     return r.create_response(message=message,
                              end_session=end_session)
         
 
 @VoiceHandler(intent="PreviousIntent")
 def previous_intent_handler(request):
-    user_queue = next_cache[request.user_id()]
-    previous_response = user_queue.previous_response()
-    print (user_queue.prev)
-    if previous_response:
-        message = previous_response
+    user_queue = twitter_cache.user_queue(request.access_token())
+    if user_queue.has_prev():
+        message = user_queue.read_out_prev()
     else:
         message = "I couldn't find anything to repeat"
     return r.create_response(message=message)
