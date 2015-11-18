@@ -137,7 +137,7 @@ def search_tweets_handler(request):
 
 @VoiceHandler(intent="FindLatestMentions")
 def list_mentions_handler(request):
-    return tweet_list_handler(request, tweet_list_builder=get_latest_twitter_mentions)
+    return tweet_list_handler(request, tweet_list_builder=get_latest_twitter_mentions, msg_prefix="Looking tweets that mention you.")
 
 
 @VoiceHandler(intent="ListHomeTweets")
@@ -153,12 +153,12 @@ def list_user_tweets_handler(request):
 
 @VoiceHandler(intent="RetweetsOfMe")
 def list_retweets_of_me_handler(request):
-    return tweet_list_handler(request, tweet_list_builder=get_retweets_of_me)
+    return tweet_list_handler(request, tweet_list_builder=get_retweets_of_me, msg_prefix="Looking for retweets.")
 
 
 @VoiceHandler(intent="FindFavouriteTweets")
 def find_my_favourites_handler(request):
-    return tweet_list_handler(request, tweet_list_builder=get_my_favourite_tweets)
+    return tweet_list_handler(request, tweet_list_builder=get_my_favourite_tweets, msg_prefix="Finding your favourite tweets.")
 
 
 def focused_on_tweet(request):
