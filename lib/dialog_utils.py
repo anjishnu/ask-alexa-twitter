@@ -47,9 +47,9 @@ class Request(object):
 
     def access_token(self):
         try:
-            self.request['session']['user']['accessToken']
+            return self.request['session']['user']['accessToken']
         except:
-            return None
+             return None
 
 
     def session_id(self):

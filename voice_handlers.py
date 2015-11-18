@@ -39,6 +39,11 @@ def launch_request_handler(request):
     """ Annotate functions with @VoiceHandler so that they can be automatically mapped 
     to request types. Use the 'request_type' field to map them to non-intent requests """
 
+
+    print ("launch twitter cache", twitter_cache.users().keys())
+    print (request.access_token() in twitter_cache.users().keys())
+    print (type(request.access_token()), type(list(twitter_cache.users().keys())[0]))
+    print (request.access_token(), list(twitter_cache.users().keys())[0])
     if request.access_token() in twitter_cache.users():
         user_cache = twitter_cache.get_user_state(request.access_token())        
         user_cache["amzn_id"]= request.user_id()
@@ -155,7 +160,57 @@ def list_retweets_of_me_handler(request):
 @VoiceHandler(intent="FindFavouriteTweets")
 def find_my_favourites_handler(request):
     return tweet_list_handler(request, tweet_list_builder=get_my_favourite_tweets)
-              
+
+
+def focused_on_tweet(request):
+    """
+    Return index if focused on tweet False if couldn't
+    """
+    slots = request.get_slot_map()
+    if "Index" in slots:
+        index = int(slots['Index'])
+
+    elif "Ordinal" in slots:
+        parse_ordinal = lambda inp : int("".join([l for l in inp if l in string.digits]))
+        index = parse_ordinal(slots['Ordinal'])
+    else:
+        return False
+    index = index - 1 # Going from regular notation to CS
+    user_state = twitter_cache.get_user_state(request.access_token())
+    queue = user_state['user_queue']['queue']
+    if index < len(queue):
+        # Analyze tweet in queue
+        tweet_to_analyze = queue[index]
+        user_state['focus_tweet'] = tweet_to_analyze
+        return index + 1
+    return False
+
+@VoiceHandler(intent="ReplyIntent")
+def reply_handler(request):
+    message = "Sorry, I couldn't tell which tweet you want to reply to. "
+    if not slots["Tweet"]:
+        return reply_focus_handler(request)
+    else:
+        index = focused_on_tweet(request)
+        if index: # Successfully focused on a tweet
+            user_state = twitter_cache.get_user_state(request.access_token())
+            focus_tweet = user_state['focus_tweet']
+            tweet_message = "@{0} {1}".format(focus_tweet.user_name(),
+                                          slots['Tweet'])
+            params = {"in_reply_to_status_id": focus_tweet.get_id()}
+            message = post_tweet(request.access_token(), tweet_message, params)
+            del user_state['focus_tweet'] # clear user state
+    return r.create_response(message=message)
+    
+
+@VoiceHandler(intent="ReplyFocus")
+def reply_focus_handler(request):    
+    msg = "Sorry, I couldn't tell which tweet you wanted to reply to."
+    index = focused_on_tweet(request)
+    if index:
+        return r.create_message(message="Do you want to reply to tweet {} ? If so say reply, followed by your message".format(index))
+    return r.create_response(message=msg, end_session=False)
+
 
 @VoiceHandler(intent="NextIntent")
 def next_intent_handler(request):
@@ -179,7 +234,7 @@ def next_intent_handler(request):
 @VoiceHandler(intent="PreviousIntent")
 def previous_intent_handler(request):
     user_queue = twitter_cache.user_queue(request.access_token())
-    if user_queue.has_prev():
+    if user_queue and user_queue.has_prev():
         message = user_queue.read_out_prev()
     else:
         message = "I couldn't find anything to repeat"

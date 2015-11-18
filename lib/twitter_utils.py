@@ -1,4 +1,5 @@
 import requests
+import jsonpickle
 from requests_oauthlib import OAuth1
 from urllib.parse import parse_qs, urlencode
 import cherrypy 
@@ -7,6 +8,14 @@ import json
 import os
 import re
 from collections import defaultdict
+
+jsonpickle.set_encoder_options('simplejson', sort_keys=True, indent=4)
+
+class Object:
+    def to_JSON(self):
+        return json.dumps(self, default=lambda o: o.__dict__, 
+            sort_keys=True, indent=4)
+
 
 class LocalCache(object):
     """ Generic class for encapsulating twitter credential caching """
@@ -97,8 +106,7 @@ class LocalCache(object):
                 
                 with open(self.server_fname()) as backupfile:
                     print ("Attempting to reload cache")
-                    self.memcache['server'] = json.load(backupfile)
-
+                    self.memcache['server'] = jsonpickle.decode(backupfile.read())
 
                 print ("Server cache loaded", json.dumps(self.memcache, indent=4))
                 for user in self.memcache['server']['user_list']:
@@ -106,17 +114,19 @@ class LocalCache(object):
                     if os.path.exists(self.user_fname(user)):
                         print ("found path for user", user)
                         with open(self.user_fname(user)) as userfile:
-                            j_obj = json.load(userfile)
-                            if 'user_queue' in j_obj:
-                                j_obj['user_queue'] = ReadableQueue.deserialize(j_obj['user_queue'])
-                        self.memcache['users'][user] = j_obj
-                        print ("loaded data for user...", user, j_obj['screen_name'])
-                    cache_loaded = True
-            except:
+                            user_data = jsonpickle.decode(userfile.read())
+                        self.memcache['users'][user] = user_data
+                cache_loaded = True
+            except Exception as e:
                 print ("Cache file corrupted...")
+                raise e
         if not cache_loaded:
             print ("Cache could not be loaded")
             pass
+        else:
+            print ("CACHE LOADED SUCCESSFULLY!")
+            print (jsonpickle.encode(self.memcache))
+
 
     def serialize(self):
         json_to_serialize = self.memcache['server']
@@ -124,15 +134,14 @@ class LocalCache(object):
         json_to_serialize.update({"user_list" : user_list})
         with open(self.server_fname(), 'w') as backup_server:
             # Serialize Server:
-            backup_server.write(json.dumps(json_to_serialize, indent=4))
-        
+            json_encoded = jsonpickle.encode(json_to_serialize)
+            backup_server.write(json_encoded)
+            
         for user in user_list:
             user_data = self.get_user_state(user)
-            if 'user_queue' in user_data:
-                user_data['user_queue']['queue'] = user_data['user_queue'].serialize()
-
+            json_encoded = jsonpickle.encode(user_data)
             with open(self.user_fname(user), 'w') as userfile:
-                userfile.write(json.dumps(user_data, indent=4))
+                userfile.write(json_encoded)
 
     def __contains__(self, item):
         return item in self.memcache
@@ -196,30 +205,6 @@ class ReadableQueue(object):
     def read_out_prev(self, offset=1):
          return " ".join([readable.read_out() for readable in self.get_prev(offset)])
 
-    def serialize(self):
-         new_map = {
-             "queue" : [readable.serialize() for readable in self.queue()],
-             "pos" : self.pos()
-         }
-         return new_map
-
-    def serialize_to_disk(self, filename):
-         with open(filename, 'w') as outfile:
-             outfile.write(json.dumps(self.serialize()))
-     
-    @classmethod
-    def deserialize(self, json_obj, Readable):
-         queue = {Readable.deserialize(r) for r in json_obj['queue']}
-         pos = json_obj['pos']
-         rq =  ReadableQueue(queue, pos)
-         return rq
-
-    @classmethod
-    def deserialize_from_disk(self, filename, Readable):
-         with open(filename) as disk_file:
-             return self.deserialize(json.load(disk_file))
-
-
 
 #Local cache caches tokens for different users 
 local_cache = LocalCache()
@@ -250,7 +235,7 @@ def strip_html(text):
                      if  ('http:' not in token) and ('https:' not in token)])
 
 
-class Tweet(object):
+class Tweet(Object):
     def __init__(self, json_obj):
         self.tweet = json_obj
 
@@ -279,15 +264,24 @@ class Tweet(object):
         return "tweet number {num} by {user} : {text}".format(num=index+1, 
                                                               user=self.get_screen_name(),
                                                               text = text)
+    
+    def detailed_description(self):
+        response_builder = ["This tweet by {screen_name} - twitter handle {user_name} : {description}."
+                            .format(screen_name=self.tweet['user']['screen_name'],
+                                    user_name=self.tweet['user']['name'],
+                                    description=self.tweet['user']['description'])]
+        if self.tweet['retweeted']:
+            response_builder += ["It's been retweeted {} times.".format(self.tweet['retweet_count'])]
+        if self.tweet['favorited']:
+            response_builder += ["{} people have favorited it.".format(self.tweet['favorites_count'])]
+        if self.tweet["in_reply_to_screen_name"]:
+            response_builder += ["it was posted in response to user {}.".format(self.tweet['in_reply_to_screen_name'])]
+        response_builder += ["the text of the tweet is, {}".format(self.tweet['text'])]
+        return " ".join(response_builder)
+
     def user_mentions(self):
         return self.tweet['user_mentions']
 
-    def serialize(self):
-        return json.dumps(self.tweet, indent=4)
-
-    @classmethod
-    def deserialize(self, json_str):
-        return Tweet(json.loads(json_str))
 
 def get_cached_access_pair(uid):
     if uid in local_cache.users():
@@ -333,12 +327,13 @@ def authenticate_user_page(callback_url="", metadata=None):
     return r.text
     
 
-def post_tweet(user_id, message):
+def post_tweet(user_id, message, additional_params={}):
     """
     Helper function to post a tweet 
     """
     url = "https://api.twitter.com/1.1/statuses/update.json"    
     params = { "status" : message }
+    params.update(additional_params)
     r = make_twitter_request(url, user_id, params, request_type='POST')
     print (r.text)
     return "Successfully posted a tweet {}".format(message)

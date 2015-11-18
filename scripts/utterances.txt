@@ -1,5 +1,102 @@
-PostTweet	i want to post a tweet
-PostTweet	post {something that's a |tweet}
-PostTweet	tweet {some kind of message|tweet} on twitter
-PostTweet	tweet {a really long adn winding message|tweet}
-PostTweet	post {i really like cake and amazon echo is super awesome|tweet} on twitter
+PostTweet       i want to post a tweet
+PostTweet	  please post a tweet
+PostTweet	  	 post a tweet
+PostTweet		      post a tweet please
+PostTweet		      	   i would like to post a tweet
+PostTweet       post {Tweet}
+PostTweet       tweet {Tweet} on twitter
+PostTweet       tweet {Tweet}
+PostTweet       post {Tweet} on twitter
+PostTweet	     please post {Tweet} on twitter
+PostTweet	     	    post {Tweet}
+PostTweet		    	 tweet {Tweet}
+PostTweet			       post a message {Tweet}
+PostTweet			       	    tweet a message {Tweet}
+PostTweet				    	  update my status {Tweet}
+PostTweet					  	 create a message {Tweet}
+PostTweet						 	note to self {Tweet}
+NextIntent							     next please
+NextIntent							     	  next
+NextIntent									more
+NextIntent										tell me more
+NextIntent										     what next
+PreviousIntent										     go back
+PreviousIntent										     previous
+PreviousIntent										     what was the last tweet
+ListHomeTweets										     list my home tweets
+ListHomeTweets										     show me tweets on my home page
+ListHomeTweets										     what are the tweets on my twitter wall
+ListHomeTweets										     what are the top tweets
+ListHomeTweets										     read out some tweets
+ListHomeTweets										     what is up
+ListHomeTweets										     what is happening
+ListHomeTweets										     what happening on my homepage
+ListHomeTweets										     list home page tweets
+ListHomeTweets										     what are the top tweets on my homepage
+ListHomeTweets										     my homepage please
+ListHomeTweets										     what are the tweets on my timeline
+ListHomeTweets										     tell me my homepage
+ListHomeTweets										     what is on my homepage
+ListHomeTweets										     what is on my time line
+ListHomeTweets										     show me my timeline
+ListHomeTweets										     what is on my home page
+SearchTweets										     search for tweets about {something important|Topic}
+SearchTweets										     find me some tweets {a topic of my choosing|Topic}
+SearchTweets										     search for {obama|Topic}
+SearchTweets										     look for some tweets about {modi | Topic}
+SearchTweets										     please search for some tweets
+SearchTweets										     find tweets about {life|Topic}
+SearchTweets										     show me the top tweets about {the paris terror attacks|Topic}
+FindLatestMentions									     tell me my latest mentions
+FindLatestMentions									     what are my latest mentions
+FindLatestMentions									     has anyone mentioned me
+FindLatestMentions									     if anybody has mentioned me
+FindLatestMentions									     who mentioned me recently
+FindLatestMentions									     list my mentions
+FindFavouriteTweets									     list my favorite tweets
+FindFavouriteTweets									     list my favorites
+FindFavouriteTweets									     what are my favorites
+FindFavouriteTweets									     tweets i have favourited
+FindFavouriteTweets									     tell me my recent favorites
+FindFavouriteTweets									     for my favorite tweets
+RetweetsOfMe										     my retweets
+RetweetsOfMe										     who retweeted me
+RetweetsOfMe										     list my retweets
+RetweetsOfMe										     list my artie's'
+RetweetsOfMe										     show me my artie's
+RetweetsOfMe										     show my artie's
+RetweetsOfMe										     what are my retweets
+RetweetsOfMe										     has anyone retweeted me recently
+RetweetsOfMe										     do i have any retweets
+RetweetsOfMe										     if i have any retweets
+RetweetsOfMe										     someone has retweeted me
+UserTweets										     tweets by me
+UserTweets										     some tweets i have posted
+UserTweets										     show my tweets
+UserTweets										     tell me my last few tweets
+UserTweets										     my tweets
+UserTweets										     my own tweets
+MoreInfo										     more info about tweet {Index}
+MoreInfo										     tell me more about tweet number {Index}
+MoreInfo										     tell me more about the {Ordinal} tweet
+MoreInfo										     more info on number {Index} please
+MoreInfo										     tell me more about number {Index}
+MoreInfo										     who wrote number {Index}
+ReplyIntent										     reply saying {Tweet}
+ReplyIntent										     reply {Tweet}
+ReplyIntent										     post reply {Tweet}
+ReplyFocus										     reply to tweet number {Index}
+ReplyIntent										     reply to tweet number {Index} {Tweet}
+ReplyFocus										     please reply to the {Ordinal} tweet
+ReplyIntent										     please reply to the {Ordinal} saying {Tweet}
+ReplyIntent										     please reply {Tweet}
+ReplyFocus										     post reply to the {Ordinal}
+ReplyFocus										     post reply to this one
+ReplyIntent										     post a reply to tweet number {Index} {Tweet}
+ReplyIntent write a reply saying {Tweet}
+ReplyIntent post a reply saying {Tweet}
+ReplyIntent post a reply to number {Index} saying {Tweet}
+ReplyIntent post a reply and say {Tweet}
+ReplyIntent reply saying {Tweet}
+ReplyIntent please reply to this saying {Tweet}
+ReplyIntent reply {Tweet}
