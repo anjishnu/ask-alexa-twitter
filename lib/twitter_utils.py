@@ -9,12 +9,8 @@ import os
 import re
 from collections import defaultdict
 
-jsonpickle.set_encoder_options('simplejson', sort_keys=True, indent=4)
-
-class Object:
-    def to_JSON(self):
-        return json.dumps(self, default=lambda o: o.__dict__, 
-            sort_keys=True, indent=4)
+# For readable serializations
+jsonpickle.set_encoder_options('json', sort_keys=True, indent=4)
 
 
 class LocalCache(object):
@@ -61,36 +57,6 @@ class LocalCache(object):
         if 'user_queue' in self.memcache['users'][user_id]:
             return self.memcache['users'][user_id]['user_queue']
             
-    def __setitem__(self, key, item):
-        self.memcache[key] = item
-
-    def __getitem__(self, key):
-        return self.memcache[key]    
-
-    def __repr__(self):
-        return repr(self.memcache)
-
-    def __len__(self):
-        return len(self.memcache)
-
-    def __delitem__(self, key):
-        del self.memcache[key]
-
-    def clear_memory(self):
-        return self.memcache.clear()
-
-    def update_memory(self, *args, **kwargs):
-        return self.memcache.update(*args, **kwargs)
-
-    def keys(self):
-        return self.memcache.keys()
-
-    def values(self):
-        return self.memcache.values()
-
-    def items(self):
-        return self.memcache.items()
-
     def server_fname(self):
         return self.server_data_template.format(self.backup)
         
@@ -143,11 +109,6 @@ class LocalCache(object):
             with open(self.user_fname(user), 'w') as userfile:
                 userfile.write(json_encoded)
 
-    def __contains__(self, item):
-        return item in self.memcache
-
-    def __iter__(self):
-        return iter(self.memcache)
 
     
 class ReadableQueue(object):    
@@ -235,7 +196,7 @@ def strip_html(text):
                      if  ('http:' not in token) and ('https:' not in token)])
 
 
-class Tweet(Object):
+class Tweet(object):
     def __init__(self, json_obj):
         self.tweet = json_obj
 
@@ -308,7 +269,6 @@ def get_request_token(callback_url=None):
 def authenticate_user_page(callback_url="", metadata=None):
     url = "https://api.twitter.com/oauth/authenticate"
     oauth_secret, oauth_token = get_request_token(callback_url)
-    # local_cache['metadata'] = metadata
     local_cache.update_server_state({'metadata' : metadata })
 
     params = { "force_login" : True,

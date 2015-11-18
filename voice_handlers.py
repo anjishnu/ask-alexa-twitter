@@ -31,7 +31,7 @@ if 'twitter_keys' not in server_cache_state:
 
 def default_handler(request):
     """ The default handler gets invoked if no handler is set for a request """
-    return r.create_response(message="Just ask.")
+    return launch_request_handler(request)
 
 
 @VoiceHandler(request_type="LaunchRequest")
