@@ -261,12 +261,12 @@ class Tweet(Object):
         
     def read_out(self, index):
         text = self._process_text()
-        return "tweet number {num} by {user} : {text}".format(num=index+1, 
+        return "tweet number {num} by {user} : {text} ,".format(num=index+1, 
                                                               user=self.get_screen_name(),
                                                               text = text)
     
     def detailed_description(self):
-        response_builder = ["This tweet by {screen_name} - twitter handle {user_name} : {description}."
+        response_builder = ["This tweet was posted by {screen_name} whose twitter handle is {user_name} : {description}."
                             .format(screen_name=self.tweet['user']['screen_name'],
                                     user_name=self.tweet['user']['name'],
                                     description=self.tweet['user']['description'])]
@@ -276,7 +276,7 @@ class Tweet(Object):
             response_builder += ["{} people have favorited it.".format(self.tweet['favorites_count'])]
         if self.tweet["in_reply_to_screen_name"]:
             response_builder += ["it was posted in response to user {}.".format(self.tweet['in_reply_to_screen_name'])]
-        response_builder += ["the text of the tweet is, {}".format(self.tweet['text'])]
+        response_builder += ["the text of the tweet is, {}.".format(self.tweet['text'])]
         return " ".join(response_builder)
 
     def user_mentions(self):
@@ -294,24 +294,14 @@ def get_cached_access_pair(uid):
 
 def get_request_token(callback_url=None):
     url = "https://api.twitter.com/oauth/request_token"
-
-
     consumer_key, consumer_secret = local_cache.get_server_state()['twitter_keys']
-    # consumer_key, consumer_secret = local_cache['twitter_keys']    
-    
 
     auth = OAuth1(consumer_key, consumer_secret)
     params = { "oauth_callback" : callback_url } 
     r = requests.post(url, auth=auth, params=params)
     response_obj = parse_qs(r.text)    
-
-    # local_cache["request_token"] = response_obj['oauth_token'][0]
-    # local_cache['request_secret'] = response_obj['oauth_token_secret'][0]    
-
     local_cache.update_server_state({ "request_token" : response_obj['oauth_token'][0],
                                       "request_secret": response_obj['oauth_token_secret'][0] })
-    
-
     return response_obj['oauth_token_secret'], response_obj['oauth_token']
     
 

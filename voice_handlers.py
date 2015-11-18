@@ -39,11 +39,6 @@ def launch_request_handler(request):
     """ Annotate functions with @VoiceHandler so that they can be automatically mapped 
     to request types. Use the 'request_type' field to map them to non-intent requests """
 
-
-    print ("launch twitter cache", twitter_cache.users().keys())
-    print (request.access_token() in twitter_cache.users().keys())
-    print (type(request.access_token()), type(list(twitter_cache.users().keys())[0]))
-    print (request.access_token(), list(twitter_cache.users().keys())[0])
     if request.access_token() in twitter_cache.users():
         user_cache = twitter_cache.get_user_state(request.access_token())        
         user_cache["amzn_id"]= request.user_id()
@@ -69,11 +64,15 @@ def post_tweet_intent_handler(request):
     """
     tweet = request.get_slot_value("Tweet")
     tweet = tweet if tweet else ""    
-
-    # Use ResponseBuilder object to build responses and UI cards
     if tweet:
-        return r.create_response(message=post_tweet(request.access_token(), tweet),
-                                 end_session=True)
+        user_state = twitter_cache.get_user_state(request.access_token())
+
+        def action():
+            return post_tweet(request.access_token(), tweet)
+        message = "I am ready to post the tweet, {}. Please say yes to confirm or stop to cancel.".format(tweet)
+        user_state['pending_action'] = {"action" : action,
+                                        "description" : message} 
+        return r.create_response(message=message, end_session=False)
     else:
         # No tweet could be disambiguated
         message = " ".join(
@@ -175,42 +174,107 @@ def focused_on_tweet(request):
         index = parse_ordinal(slots['Ordinal'])
     else:
         return False
+        
     index = index - 1 # Going from regular notation to CS
     user_state = twitter_cache.get_user_state(request.access_token())
-    queue = user_state['user_queue']['queue']
+    queue = user_state['user_queue'].queue()
     if index < len(queue):
         # Analyze tweet in queue
         tweet_to_analyze = queue[index]
         user_state['focus_tweet'] = tweet_to_analyze
         return index + 1
+        twitter_cache.serialize()
     return False
+
+"""
+Definining API for executing pending actions:
+action = function that does everything you want and returns a 'message' to return.
+description = read out in case there is a pending action at startup. 
+other metadata will be added as time progresses
+"""
 
 @VoiceHandler(intent="ReplyIntent")
 def reply_handler(request):
     message = "Sorry, I couldn't tell which tweet you want to reply to. "
+    slots = request.get_slot_map()
+    user_state = twitter_cache.get_user_state(request.access_token())
     if not slots["Tweet"]:
         return reply_focus_handler(request)
     else:
-        index = focused_on_tweet(request)
-        if index: # Successfully focused on a tweet
+        can_reply = False
+        if slots['Tweet'] and not (slots['Ordinal'] or slots['Index']):
             user_state = twitter_cache.get_user_state(request.access_token())
-            focus_tweet = user_state['focus_tweet']
-            tweet_message = "@{0} {1}".format(focus_tweet.user_name(),
+            if 'focus_tweet' in user_state: # User is focused on a tweet
+                can_reply = True
+        else:
+            index = focused_on_tweet(request)
+            if index: can_reply = True
+        if can_reply: # Successfully focused on a tweet
+            index, focus_tweet = user_state['focus_tweet']
+            tweet_message = "@{0} {1}".format(focus_tweet.get_screen_name(),
                                           slots['Tweet'])
             params = {"in_reply_to_status_id": focus_tweet.get_id()}
-            message = post_tweet(request.access_token(), tweet_message, params)
-            del user_state['focus_tweet'] # clear user state
+
+            
+            def action():
+                print ("Performing action! lambda functions are awesome!")
+                message = post_tweet(request.access_token(), tweet_message, params)
+                del user_state['focus_tweet']
+                return message
+
+            message = "I am ready to post the tweet, {}. Please say yes to confirm or stop to cancel.".format(slots['Tweet'])
+            user_state['pending_action'] = {"action" : action,
+                                            "description" : message }
+
     return r.create_response(message=message)
-    
+
+
+@VoiceHandler(intent="YesIntent")
+def confirm_action_handler(request):
+    message = "okay."
+    user_state = twitter_cache.get_user_state(request.access_token())
+    if 'pending_action' in user_state:
+        params = user_state['pending_action']
+        # Perform action
+        message = params['action']()
+        if 'message' in params:
+            message = params['message']
+        if 'callback' in params:
+            params['callback']()
+        del user_state['pending_action']
+        print ("successfully executed command")
+    return r.create_response(message)
+
+
+@VoiceHandler(intent="NoIntent")
+def cancel_action_handler(request):
+    message = "okay."
+    user_state = twitter_cache.get_user_state(request.access_token())
+    if 'pending_action' in user_state:
+        del user_state['pending_action'] # Clearing out the user's pending action
+        print ("cleared user_state")
+        message += " i won't do it."
+    return r.create_response(message)
+
 
 @VoiceHandler(intent="ReplyFocus")
 def reply_focus_handler(request):    
     msg = "Sorry, I couldn't tell which tweet you wanted to reply to."
     index = focused_on_tweet(request)
     if index:
-        return r.create_message(message="Do you want to reply to tweet {} ? If so say reply, followed by your message".format(index))
+        return r.create_response(message="Do you want to reply to tweet {} ? If so say reply, followed by your message".format(index))
     return r.create_response(message=msg, end_session=False)
 
+
+@VoiceHandler(intent="MoreInfo")
+def more_info_handler(request):
+    index = focused_on_tweet(request)
+    if index:
+        user_state = twitter_cache.get_user_state(request.access_token())
+        index, tweet = user_state['focus_tweet']
+        message = " ".join(["details about tweet number {}.".format(index+1), tweet.detailed_description(),"To reply, say 'reply' followed by your message"])
+        return r.create_response(message=message, end_session=False)
+    return reply_focus_handler(request)
 
 @VoiceHandler(intent="NextIntent")
 def next_intent_handler(request):

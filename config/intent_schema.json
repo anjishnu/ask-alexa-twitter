@@ -50,6 +50,15 @@
             "intent": "AMAZON.HelpIntent",
             "slots": []
         },
+        {
+            "intent": "YesIntent",
+            "slots": []
+        },
+              {
+            "intent": "NoIntent",
+            "slots": []
+        },
+
 	    {
             "intent": "MoreInfo",
           "slots": [{"name" : "Index",

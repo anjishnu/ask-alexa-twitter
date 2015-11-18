@@ -5,7 +5,6 @@ from lib.dialog_utils import Request
 import pkgutil
 import voice_handlers
 import inspect
-
 from config.config import INTENT_SCHEMA, NON_INTENT_REQUESTS
 
 

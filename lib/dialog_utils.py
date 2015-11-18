@@ -69,7 +69,7 @@ class Request(object):
             return []
 
     def get_slot_map(self):
-        return {slot_name : request.get_slot_value(slot_name) for slot_name in self.get_slot_names}
+        return {slot_name : self.get_slot_value(slot_name) for slot_name in self.get_slot_names()}
 
     
 class ResponseBuilder(object):
