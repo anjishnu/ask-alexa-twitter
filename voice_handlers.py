@@ -42,14 +42,20 @@ def launch_request_handler(request):
     if request.access_token() in twitter_cache.users():
         user_cache = twitter_cache.get_user_state(request.access_token())        
         user_cache["amzn_id"]= request.user_id()
-        return r.create_response("Welcome, {}".format(user_cache["screen_name"]))
+        base_message = "Welcome to Twitter, {} .".format(user_cache["screen_name"])
+        print (user_cache)
+        if 'pending_action' in user_cache:
+            base_message += " You have one pending action . "
+           print ("Found pending action")
+            if 'description' in user_cache['pending_action']:
+                print ("Found description")
+                base_message += user_cache['pending_action']['description']
+        return r.create_response(base_message)
 
-    card = r.create_card(title="Please log into twitter",
-                         content=cherrypy.url() + "login/{}".format(request.user_id()))
+    card = r.create_card(title="Please log into twitter")
     response = r.create_response(message="Welcome to twitter, looks like you haven't logged in!"
                                  " Log in via the alexa app.", card_obj=card)
     return response
-
 
 
 @VoiceHandler(request_type="SessionEndedRequest")
@@ -69,7 +75,7 @@ def post_tweet_intent_handler(request):
 
         def action():
             return post_tweet(request.access_token(), tweet)
-        message = "I am ready to post the tweet, {}. Please say yes to confirm or stop to cancel.".format(tweet)
+        message = "I am ready to post the tweet, {} ,\n Please say yes to confirm or stop to cancel .".format(tweet)
         user_state['pending_action'] = {"action" : action,
                                         "description" : message} 
         return r.create_response(message=message, end_session=False)
@@ -77,8 +83,8 @@ def post_tweet_intent_handler(request):
         # No tweet could be disambiguated
         message = " ".join(
             [
-                "I'm sorry, I couldn't understand what you wanted to tweet.",
-                "Please prepend the message with either post or tweet"
+                "I'm sorry, I couldn't understand what you wanted to tweet .",
+                "Please prepend the message with either post or tweet ."
             ]
         )
         return r.create_response(message=message, end_session=False)
@@ -86,15 +92,20 @@ def post_tweet_intent_handler(request):
 
 @VoiceHandler(intent="AMAZON.HelpIntent")
 def help_intent_handler(request):
-    msg = ("Currently we only support posting tweets."
-           "To post a tweet, say 'post hello world' or 'tweet hello world'")
-    return r.create_response(msg)
+    print (request)
+    msg = ("I can do several things for you on twitter! "
+           "I can tell you about the top tweets on your home page, or the last tweets you favourited . "
+           "I can also tell you about recent tweets that mention you, or were posted by you . "
+           "When I am reading out a list of tweets, you can stop me and ask me to tell you about the tweet in more detail, or ask me to post a reply to it . " 
+           "And of course, whenever post a tweet, say 'post hello world' or 'tweet hello world'. I am not good with hashtags or trending topics just yet, but I'm working on it! ")
+    print (msg)
+    return r.create_response(message=msg)
 
 
 @VoiceHandler(intent="AMAZON.StopIntent")
 def session_ended_request_handler(request):
     print ("Executing handler")
-    return r.create_response(message="Goodbye!")
+    return cancel_action_handler(request)
 
 
 def tweet_list_handler(request, tweet_list_builder, msg_prefix=""):
@@ -110,7 +121,7 @@ def tweet_list_handler(request, tweet_list_builder, msg_prefix=""):
         twitter_cache.initialize_user_queue(user_id=request.access_token(),
                                             queue=tweets)
         text_to_read_out = twitter_cache.user_queue(request.access_token()).read_out_next(max_response_tweets)        
-        message = msg_prefix + text_to_read_out + ", say 'next' to hear more."
+        message = msg_prefix + text_to_read_out + ", say 'next' to hear more, or reply to a tweet by number."
         return r.create_response(message=message,
                                  end_session=False)
     else:
@@ -137,7 +148,7 @@ def search_tweets_handler(request):
 
 @VoiceHandler(intent="FindLatestMentions")
 def list_mentions_handler(request):
-    return tweet_list_handler(request, tweet_list_builder=get_latest_twitter_mentions, msg_prefix="Looking tweets that mention you.")
+    return tweet_list_handler(request, tweet_list_builder=get_latest_twitter_mentions, msg_prefix="Looking for tweets that mention you.")
 
 
 @VoiceHandler(intent="ListHomeTweets")
@@ -148,7 +159,7 @@ def list_home_tweets_handler(request):
 @VoiceHandler(intent="UserTweets")
 def list_user_tweets_handler(request):
     """ by default gets tweets for current user """
-    return tweet_list_handler(request, tweet_list_builder=get_user_latest_tweets)
+    return tweet_list_handler(request, tweet_list_builder=get_user_latest_tweets, msg_prefix="Looking for tweets posted by you.")
 
 
 @VoiceHandler(intent="RetweetsOfMe")
@@ -166,10 +177,10 @@ def focused_on_tweet(request):
     Return index if focused on tweet False if couldn't
     """
     slots = request.get_slot_map()
-    if "Index" in slots:
+    if "Index" in slots and slots["Index"]:
         index = int(slots['Index'])
 
-    elif "Ordinal" in slots:
+    elif "Ordinal" in slots and slots["Index"]:
         parse_ordinal = lambda inp : int("".join([l for l in inp if l in string.digits]))
         index = parse_ordinal(slots['Ordinal'])
     else:
@@ -209,6 +220,7 @@ def reply_handler(request):
         else:
             index = focused_on_tweet(request)
             if index: can_reply = True
+
         if can_reply: # Successfully focused on a tweet
             index, focus_tweet = user_state['focus_tweet']
             tweet_message = "@{0} {1}".format(focus_tweet.get_screen_name(),
@@ -246,7 +258,7 @@ def confirm_action_handler(request):
     return r.create_response(message)
 
 
-@VoiceHandler(intent="NoIntent")
+@VoiceHandler(intent="AMAZON.CancelIntent")
 def cancel_action_handler(request):
     message = "okay."
     user_state = twitter_cache.get_user_state(request.access_token())

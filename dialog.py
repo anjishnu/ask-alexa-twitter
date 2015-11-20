@@ -57,6 +57,10 @@ def route_intent(request_json):
     This code routes requests to the appropriate handler
     """
     request = Request(request_json)    
+    # hack for twitter app 
+    if not request.access_token():
+        return voice_handlers.default_handler(request)
+    # end hack for twitter 
     voice_handler = REGISTERED_HANDLERS[request.request_type()]
     if request.intent_name():
         voice_handler = voice_handler[request.intent_name()]

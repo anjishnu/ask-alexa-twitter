@@ -91,7 +91,6 @@ class LocalCache(object):
             pass
         else:
             print ("CACHE LOADED SUCCESSFULLY!")
-            print (jsonpickle.encode(self.memcache))
 
 
     def serialize(self):
@@ -133,16 +132,11 @@ class ReadableQueue(object):
         self.hashmap['pos'] = val
 
     def get_next(self, offset=1):
-        print ("inside next...", offset, self.pos())
         
         if self.pos() < len(self.queue()):
-            print ("ENTERED LOOP")
             temp_queue =  self.queue()[self.pos(): self.pos() + offset]
-            print ("TEMP QUEUE", temp_queue)
-
             self.set_pos(self.pos() + offset)    
             if self.pos() > len(self.queue()): self.set_pos(len(self.queue()))
-            print ("VALUE OF POS", self.pos())
             return temp_queue
 
             
