@@ -17,7 +17,8 @@ from lib.dialog_utils import VoiceHandler, ResponseBuilder as r, VoiceCache, Voi
 from lib.twitter_utils import (post_tweet, get_home_tweets, get_retweets_of_me, 
                                get_my_favourite_tweets, get_my_favourite_tweets, 
                                get_latest_twitter_mentions, search_for_tweets_about,
-                               get_user_latest_tweets)
+                               get_user_latest_tweets, get_user_twitter_details,
+                               geo_search, closest_trend_search, list_trends)
 
 # -- Config setup -- 
 from config.config import TWITTER_CONSUMER_KEY, TWITTER_CONSUMER_SECRET
@@ -38,15 +39,16 @@ def default_handler(request):
 def launch_request_handler(request):
     """ Annotate functions with @VoiceHandler so that they can be automatically mapped 
     to request types. Use the 'request_type' field to map them to non-intent requests """
-
-    if request.access_token() in twitter_cache.users():
-        user_cache = twitter_cache.get_user_state(request.access_token())        
+    user_id = request.access_token()
+    get_user_twitter_details(user_id)
+    if user_id in twitter_cache.users():
+        user_cache = twitter_cache.get_user_state(user_id)        
         user_cache["amzn_id"]= request.user_id()
         base_message = "Welcome to Twitter, {} .".format(user_cache["screen_name"])
-        print (user_cache)
+        print (user_cache)        
         if 'pending_action' in user_cache:
             base_message += " You have one pending action . "
-           print ("Found pending action")
+            print ("Found pending action")
             if 'description' in user_cache['pending_action']:
                 print ("Found description")
                 base_message += user_cache['pending_action']['description']
@@ -71,13 +73,18 @@ def post_tweet_intent_handler(request):
     tweet = request.get_slot_value("Tweet")
     tweet = tweet if tweet else ""    
     if tweet:
+        
         user_state = twitter_cache.get_user_state(request.access_token())
-
+        
+        """
+        """
         def action():
             return post_tweet(request.access_token(), tweet)
         message = "I am ready to post the tweet, {} ,\n Please say yes to confirm or stop to cancel .".format(tweet)
         user_state['pending_action'] = {"action" : action,
                                         "description" : message} 
+
+
         return r.create_response(message=message, end_session=False)
     else:
         # No tweet could be disambiguated
@@ -88,6 +95,22 @@ def post_tweet_intent_handler(request):
             ]
         )
         return r.create_response(message=message, end_session=False)
+
+
+@VoiceHandler(intent="SearchTrends")
+def find_trends_handler(request):
+    location = request.get_slot_value("Location")                                                                                                                      
+    response = geo_search(request.access_token(), location) # convert natural language text to location
+    top_result = response['result']['places'][0]
+    lon, lat = top_result['centroid'] 
+    trend_params = {"lat" : lat,
+                    "long" : lon}
+    trend_location = closest_trend_search(request.access_token(), trend_params) # find closest woeid which has trends
+    trends = list_trends(request.access_token(), trend_location[0]['woeid']) # List top trends
+    trend_lst = [trend['name'] for trend in trends[0]['trends']]
+    message  = "The top trending topics near {0} are, ".format(trend_location[0]['name'])
+    message += "\n".join(["{0}, {1}, ".format(index, trend) for index, trend in enumerate(trend_lst)])
+    return r.create_response(message=message)
 
 
 @VoiceHandler(intent="AMAZON.HelpIntent")

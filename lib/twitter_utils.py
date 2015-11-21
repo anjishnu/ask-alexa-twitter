@@ -338,6 +338,47 @@ def make_twitter_request(url, user_id, params={}, request_type='GET'):
         return requests.post(url, auth=get_twitter_auth(user_id), params=params)
 
 
+
+def get_user_twitter_details(user_id, params={}):
+    url  = "https://api.twitter.com/1.1/users/lookup.json"    
+    user_cache = local_cache.get_user_state(user_id)    
+    params.update({"user_id": user_cache['twitter_user_id'] })
+    response = make_twitter_request(url, user_id, params)
+    with open("logfile.txt", 'w') as l:
+        print (json.dumps(response.json(), indent=4), file=l)
+    return response.json()
+
+
+def geo_search(user_id, search_location):
+    """
+    Search for a location - free form
+    """
+    url = "https://api.twitter.com/1.1/geo/search.json"
+    params =  {"query" : search_location }
+    response = make_twitter_request(url, user_id, params).json()
+    with open("locationlog.txt", 'w') as l:
+        print (json.dumps(response, indent=4), file=l)
+    return response
+
+
+def closest_trend_search(user_id, params={}):
+    #url = "https://api.twitter.com/1.1/trends/place.json"
+    url = "https://api.twitter.com/1.1/trends/closest.json"
+    response = make_twitter_request(url, user_id, params).json()
+    with open('trendlog.txt', 'w') as log:
+        print (json.dumps(response, indent=4), file=log)
+    return response
+
+
+def list_trends(user_id, woe_id):
+    url = "https://api.twitter.com/1.1/trends/place.json"
+    params = { "id" : woe_id }
+    response = make_twitter_request(url, user_id, params).json()
+    with open("trendlist.log", 'w') as log:
+        print(json.dumps(response, indent=4), file=log)
+    return response
+
+
 def read_out_tweets(processed_tweets, speech_convertor=None):
     """
     Input - list of processed 'Tweets'
