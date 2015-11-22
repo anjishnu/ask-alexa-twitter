@@ -75,16 +75,13 @@ def post_tweet_intent_handler(request):
     if tweet:
         
         user_state = twitter_cache.get_user_state(request.access_token())
-        
-        """
-        """
+
         def action():
             return post_tweet(request.access_token(), tweet)
+
         message = "I am ready to post the tweet, {} ,\n Please say yes to confirm or stop to cancel .".format(tweet)
         user_state['pending_action'] = {"action" : action,
                                         "description" : message} 
-
-
         return r.create_response(message=message, end_session=False)
     else:
         # No tweet could be disambiguated
@@ -99,35 +96,55 @@ def post_tweet_intent_handler(request):
 
 @VoiceHandler(intent="SearchTrends")
 def find_trends_handler(request):
-    location = request.get_slot_value("Location")                                                                                                                      
-    response = geo_search(request.access_token(), location) # convert natural language text to location
-    top_result = response['result']['places'][0]
-    lon, lat = top_result['centroid'] 
-    trend_params = {"lat" : lat,
-                    "long" : lon}
-    trend_location = closest_trend_search(request.access_token(), trend_params) # find closest woeid which has trends
-    trends = list_trends(request.access_token(), trend_location[0]['woeid']) # List top trends
-    trend_lst = [trend['name'] for trend in trends[0]['trends']]
-    message  = "The top trending topics near {0} are, ".format(trend_location[0]['name'])
-    message += "\n".join(["{0}, {1}, ".format(index, trend) for index, trend in enumerate(trend_lst)])
+
+    uid = request.access_token()
+    user_cache = twitter_cache.get_user_state(uid)
+    resolved_location = False
+    message = ""
+    location = request.get_slot_value("Location")
+
+    if not location:
+        # Get trends for user's current location
+        user_details = get_user_twitter_details(uid)        
+        location = user_details[0]['location'] 
+        if location:
+            message += "Finding trends near you . "
+        else:
+            message += "I could not figure out where you are, please set it up on your twitter account . "
+
+    if location:
+
+        response = geo_search(request.access_token(), location) # convert natural language text to location
+        top_result = response['result']['places'][0]
+        lon, lat = top_result['centroid'] 
+        trend_params = {"lat" : lat, "long" : lon}
+        trend_location = closest_trend_search(request.access_token(), trend_params) # find closest woeid which has trends
+        woeid = trend_location[0]['woeid']
+        trends = list_trends(request.access_token(), trend_location[0]['woeid']) # List top trends
+        trend_lst = [trend['name'] for trend in trends[0]['trends']]
+        message += "The top trending topics near {0} are, ".format(trend_location[0]['name'])
+        message += "\n".join(["{0}, {1}, ".format(index+1, trend) for index, trend in enumerate(trend_lst)])
+
     return r.create_response(message=message)
 
 
 @VoiceHandler(intent="AMAZON.HelpIntent")
 def help_intent_handler(request):
-    print (request)
     msg = ("I can do several things for you on twitter! "
            "I can tell you about the top tweets on your home page, or the last tweets you favourited . "
            "I can also tell you about recent tweets that mention you, or were posted by you . "
            "When I am reading out a list of tweets, you can stop me and ask me to tell you about the tweet in more detail, or ask me to post a reply to it . " 
            "And of course, whenever post a tweet, say 'post hello world' or 'tweet hello world'. I am not good with hashtags or trending topics just yet, but I'm working on it! ")
-    print (msg)
     return r.create_response(message=msg)
 
 
 @VoiceHandler(intent="AMAZON.StopIntent")
-def session_ended_request_handler(request):
-    print ("Executing handler")
+def stop_intent__handler(request):
+    return cancel_action_handler(request)
+
+
+@VoiceHandler(intent="AMAZON.CancelIntent")
+def cancel_intent_handler(request):
     return cancel_action_handler(request)
 
 
@@ -209,14 +226,14 @@ def focused_on_tweet(request):
     else:
         return False
         
-    index = index - 1 # Going from regular notation to CS
+    index = index - 1 # Going from regular notation to CS notation
     user_state = twitter_cache.get_user_state(request.access_token())
     queue = user_state['user_queue'].queue()
     if index < len(queue):
         # Analyze tweet in queue
         tweet_to_analyze = queue[index]
         user_state['focus_tweet'] = tweet_to_analyze
-        return index + 1
+        return index + 1 # Returning to regular notation
         twitter_cache.serialize()
     return False
 
@@ -260,7 +277,6 @@ def reply_handler(request):
             message = "I am ready to post the tweet, {}. Please say yes to confirm or stop to cancel.".format(slots['Tweet'])
             user_state['pending_action'] = {"action" : action,
                                             "description" : message }
-
     return r.create_response(message=message)
 
 

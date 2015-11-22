@@ -51,14 +51,18 @@
             "slots": []
         },
         {
+            "intent": "AMAZON.CancelIntent",
+            "slots": []
+        },
+        {
             "intent": "YesIntent",
             "slots": []
+        },        
+	{
+            "intent": "SearchTrends",
+            "slots": [{"name" : "Location",
+		                          "type" : "AMAZON.US_CITY"}]
         },
-              {
-            "intent": "NoIntent",
-            "slots": []
-        },
-
 	    {
             "intent": "MoreInfo",
           "slots": [{"name" : "Index",
