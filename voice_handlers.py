@@ -1,8 +1,3 @@
-from lib.dialog_utils import VoiceHandler, ResponseBuilder, VoiceCache
-from lib.twitter_utils import post_tweet, get_home_tweets
-import cherrypy
-import json
-
 """
 In this file we specify default event handlers which are then populated into the handler map using metaprogramming
 Copyright Anjishnu Kumar 2015
@@ -13,7 +8,7 @@ A response object is defined as the output of ResponseBuilder.create_response()
 
 import cherrypy
 import json
-from lib.dialog_utils import VoiceHandler, ResponseBuilder as r, VoiceCache, VoiceQueue, chunk_list
+from lib.dialog_utils import VoiceHandler, ResponseBuilder as r
 from lib.twitter_utils import (post_tweet, get_home_tweets, get_retweets_of_me, 
                                get_my_favourite_tweets, get_my_favourite_tweets, 
                                get_latest_twitter_mentions, search_for_tweets_about,
@@ -39,12 +34,13 @@ def default_handler(request):
 def launch_request_handler(request):
     """ Annotate functions with @VoiceHandler so that they can be automatically mapped 
     to request types. Use the 'request_type' field to map them to non-intent requests """
+
     user_id = request.access_token()
-    get_user_twitter_details(user_id)
     if user_id in twitter_cache.users():
+
         user_cache = twitter_cache.get_user_state(user_id)        
         user_cache["amzn_id"]= request.user_id()
-        base_message = "Welcome to Twitter, {} .".format(user_cache["screen_name"])
+        base_message = "Welcome to Twitter, {} . How may I help you today ?".format(user_cache["screen_name"])
         print (user_cache)        
         if 'pending_action' in user_cache:
             base_message += " You have one pending action . "
@@ -54,10 +50,10 @@ def launch_request_handler(request):
                 base_message += user_cache['pending_action']['description']
         return r.create_response(base_message)
 
-    card = r.create_card(title="Please log into twitter")
-    response = r.create_response(message="Welcome to twitter, looks like you haven't logged in!"
-                                 " Log in via the alexa app.", card_obj=card)
-    return response
+    card = r.create_card(title="Please log into twitter", card_type="LinkAccount")
+    return r.create_response(message="Welcome to twitter, looks like you haven't logged in!"
+                             " Log in via the alexa app.", card_obj=card,
+                             end_session=True)
 
 
 @VoiceHandler(request_type="SessionEndedRequest")
@@ -73,9 +69,7 @@ def post_tweet_intent_handler(request):
     tweet = request.get_slot_value("Tweet")
     tweet = tweet if tweet else ""    
     if tweet:
-        
         user_state = twitter_cache.get_user_state(request.access_token())
-
         def action():
             return post_tweet(request.access_token(), tweet)
 
@@ -102,6 +96,7 @@ def find_trends_handler(request):
     resolved_location = False
     message = ""
     location = request.get_slot_value("Location")
+    should_end_session = True
 
     if not location:
         # Get trends for user's current location
@@ -125,7 +120,7 @@ def find_trends_handler(request):
         message += "The top trending topics near {0} are, ".format(trend_location[0]['name'])
         message += "\n".join(["{0}, {1}, ".format(index+1, trend) for index, trend in enumerate(trend_lst)])
 
-    return r.create_response(message=message)
+    return r.create_response(message=message, end_session=should_end_session)
 
 
 @VoiceHandler(intent="AMAZON.HelpIntent")
@@ -148,19 +143,18 @@ def cancel_intent_handler(request):
     return cancel_action_handler(request)
 
 
+MAX_RESPONSE_TWEETS = 3
+
 def tweet_list_handler(request, tweet_list_builder, msg_prefix=""):
 
     """ This is a generic function to handle any intent that reads out a list of tweets"""
-    max_response_tweets = 3
     # tweet_list_builder is a function that takes a unique identifier and returns a list of things to say
     tweets = tweet_list_builder(request.access_token())
     print (len(tweets), 'tweets found')
     if tweets:
-        # chunks = chunk_list(tweets, max_response_tweets)
-        # next_cache[request.user_id()] = response_list
         twitter_cache.initialize_user_queue(user_id=request.access_token(),
                                             queue=tweets)
-        text_to_read_out = twitter_cache.user_queue(request.access_token()).read_out_next(max_response_tweets)        
+        text_to_read_out = twitter_cache.user_queue(request.access_token()).read_out_next(MAX_RESPONSE_TWEETS)        
         message = msg_prefix + text_to_read_out + ", say 'next' to hear more, or reply to a tweet by number."
         return r.create_response(message=message,
                                  end_session=False)
@@ -174,14 +168,14 @@ def search_tweets_handler(request):
     search_topic = request.get_slot_value("Topic")
     max_tweets = 3
     if search_topic:
-        message = "Tweets about {}".format(search_topic)
+        message = "Searching twitter for tweets about {} . ".format(search_topic)
         def search_tweets_builder(uid):
             params = {
                 "q" : search_topic,
                 "result_type" : "popular"
             }
-            return search_for_tweets_about(request.access_token(), params)
-        return tweet_list_handler(request, tweet_list_builder=search_tweets_builder)
+            return search_for_tweets_about(request.access_token(), params)           
+        return tweet_list_handler(request, tweet_list_builder=search_tweets_builder, msg_prefix=message)
     else:
          return r.create_response("I couldn't find a topic to search for in your request")
 
@@ -249,6 +243,7 @@ def reply_handler(request):
     message = "Sorry, I couldn't tell which tweet you want to reply to. "
     slots = request.get_slot_map()
     user_state = twitter_cache.get_user_state(request.access_token())
+    should_end_session = True
     if not slots["Tweet"]:
         return reply_focus_handler(request)
     else:
@@ -266,7 +261,6 @@ def reply_handler(request):
             tweet_message = "@{0} {1}".format(focus_tweet.get_screen_name(),
                                           slots['Tweet'])
             params = {"in_reply_to_status_id": focus_tweet.get_id()}
-
             
             def action():
                 print ("Performing action! lambda functions are awesome!")
@@ -274,16 +268,19 @@ def reply_handler(request):
                 del user_state['focus_tweet']
                 return message
 
+            should_end_session = False
             message = "I am ready to post the tweet, {}. Please say yes to confirm or stop to cancel.".format(slots['Tweet'])
             user_state['pending_action'] = {"action" : action,
                                             "description" : message }
-    return r.create_response(message=message)
+
+    return r.create_response(message=message, end_session=should_end_session)
 
 
 @VoiceHandler(intent="YesIntent")
 def confirm_action_handler(request):
     message = "okay."
     user_state = twitter_cache.get_user_state(request.access_token())
+    should_end_session = True
     if 'pending_action' in user_state:
         params = user_state['pending_action']
         # Perform action
@@ -294,18 +291,22 @@ def confirm_action_handler(request):
             params['callback']()
         del user_state['pending_action']
         print ("successfully executed command")
-    return r.create_response(message)
+        message = message + " would you like me to do anything else ? "
+        should_end_session = False
+    return r.create_response(message, end_session=should_end_session)
 
 
 @VoiceHandler(intent="AMAZON.CancelIntent")
 def cancel_action_handler(request):
     message = "okay."
     user_state = twitter_cache.get_user_state(request.access_token())
+    should_end_session = True
     if 'pending_action' in user_state:
         del user_state['pending_action'] # Clearing out the user's pending action
         print ("cleared user_state")
-        message += " i won't do it."
-    return r.create_response(message)
+        message += " i won't do it. would you like me to do something else ? "
+        should_end_session = False
+    return r.create_response(message, end_session=should_end_session)
 
 
 @VoiceHandler(intent="ReplyFocus")
@@ -323,7 +324,8 @@ def more_info_handler(request):
     if index:
         user_state = twitter_cache.get_user_state(request.access_token())
         index, tweet = user_state['focus_tweet']
-        message = " ".join(["details about tweet number {}.".format(index+1), tweet.detailed_description(),"To reply, say 'reply' followed by your message"])
+        message = " ".join(["details about tweet number {}.".format(index+1), tweet.detailed_description(), 
+                            "To reply, say 'reply' followed by your message"])
         return r.create_response(message=message, end_session=False)
     return reply_focus_handler(request)
 
@@ -338,7 +340,7 @@ def next_intent_handler(request):
     if True:
         user_queue = twitter_cache.user_queue(request.access_token())
         if not user_queue.is_finished():
-            message = user_queue.read_out_next()
+            message = user_queue.read_out_next(MAX_RESPONSE_TWEETS)
             if not user_queue.is_finished():
                 end_session = False
                 message = message + ". Please, say 'next' if you want me to read out more. "

@@ -217,11 +217,11 @@ class Tweet(object):
     def read_out(self, index):
         text = self._process_text()
         return "tweet number {num} by {user} : {text} ,".format(num=index+1, 
-                                                              user=self.get_screen_name(),
+                                                              user=self.get_user_name(),
                                                               text = text)
     
     def detailed_description(self):
-        response_builder = ["This tweet was posted by {screen_name} whose twitter handle is {user_name} : {description}."
+        response_builder = ["This tweet was posted by {user_name} whose twitter handle is {screen_name} the account description reads: {description}."
                             .format(screen_name=self.tweet['user']['screen_name'],
                                     user_name=self.tweet['user']['name'],
                                     description=self.tweet['user']['description'])]
@@ -231,7 +231,7 @@ class Tweet(object):
             response_builder += ["{} people have favorited it.".format(self.tweet['favorites_count'])]
         if self.tweet["in_reply_to_screen_name"]:
             response_builder += ["it was posted in response to user {}.".format(self.tweet['in_reply_to_screen_name'])]
-        response_builder += ["the text of the tweet is, {}.".format(self.tweet['text'])]
+        response_builder += ["the text of the tweet is, {}.".format(self._process_text())]
         return " ".join(response_builder)
 
     def user_mentions(self):
